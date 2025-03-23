@@ -9,7 +9,7 @@ from SFARandomForestClassifier import SFARandomForestClassifier
 from SFAXGBoostClassifier import SFAXGBoostClassifier
 from features_eng import features_tools_extend_X, pca_extend_X
 
-
+# Define paths for datasets and pickle files
 BINARY_DATA_PATH = 'datasets/binary'
 MULTI_DATA_PATH = 'datasets/multi_class'
 PICKLE_PATH = 'pickle'
@@ -18,9 +18,8 @@ MULTI_PICKLE_PATH = PICKLE_PATH + '/multi_class'
 PICKLE_ALL_BINARY_DATASETS_PATH = PICKLE_PATH + '/binary_datasets_idx.pkl'
 PICKLE_ALL_MULTI_DATASETS_PATH = PICKLE_PATH + '/multi_datasets_idx.pkl'
 
-
-def main(args, nepex):
-    # extract user arguments
+def main(args):
+    # Extract user arguments
     model_name = args.model_name
     ds_id = args.dataset_id
     task = args.task
@@ -31,7 +30,7 @@ def main(args, nepex):
     categories = None
     print('loading dataset')
 
-    '''load the dataset according to the selected dataset id'''
+    # Load the dataset according to the selected dataset id
     if task == 'binary':
         pickle_path = BINARY_PICKLE_PATH
         data_path = BINARY_DATA_PATH
@@ -41,11 +40,12 @@ def main(args, nepex):
         data_path = MULTI_DATA_PATH
         all_datasets_path = PICKLE_ALL_MULTI_DATASETS_PATH
 
+    # Check if the dataset's pickle file exists
     if os.path.exists(all_datasets_path):
         with open(all_datasets_path, 'rb') as ds_by_id_file:
             ds_by_id = pickle.load(ds_by_id_file)
             ds_details = ds_by_id[ds_id]
-        # load from pickle
+        # Load dataset from pickle files
         ds_path_X = pickle_path + f'/{ds_details[0]}_X.pkl'
         ds_path_y = pickle_path + f'/{ds_details[0]}_y.pkl'
         if one_hot:
@@ -62,11 +62,11 @@ def main(args, nepex):
             if os.path.exists(ds_path_categories):
                 with open(ds_path_categories, 'rb') as file_c:
                     categories = pickle.load(file_c)
-
-    else: # In case the dataset's pickle file does not yet exist, create it
+    else:
+        # Create pickle files if they do not exist
         if not os.path.exists(PICKLE_PATH):
             os.makedirs(PICKLE_PATH, exist_ok=True)
-        # read from csv and create pickles
+        # Read from CSV and create pickles
         X, y, ds_details = read_all_data_files(all_datasets_path, pickle_path, data_path, ds_id, one_hot)
         print(f'finished datasets load\n')
         if len(ds_details) == 6:
@@ -78,6 +78,7 @@ def main(args, nepex):
     ds_name = ds_details[0]
     print(f'\nDatatset: {ds_name} \n')
 
+    # Initialize models
     models_inits = {'xgb': SFAXGBoostClassifier(ds_details, seed),
                     'lgbm': SFALGBMClassifier(ds_details, seed),
                     'random_forest': SFARandomForestClassifier(ds_details, seed)}
@@ -85,7 +86,7 @@ def main(args, nepex):
     PEnTex_clf = models_inits[model_name]
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=seed, stratify=y)
 
-    '''optimize hyperparameters'''
+    # Optimize hyperparameters
     if model_name != 'random_forest':
         num_trials, best_trial = PEnTex_clf.run_optimization(X_train, y_train, X_test, y_test, categories)
         pre_params = params_dict(best_trial.params)
@@ -95,7 +96,8 @@ def main(args, nepex):
 
     params_to_set = best_trial.params if model_name != 'random_forest' else pre_params
     PEnTex_clf.set_hyper_params(params_to_set)
-    nepex.log_text('hyper_parameters', str(pre_params))
+
+    # Log hyperparameters
     hyper_opts_df = pd.DataFrame({
         'Seed': [seed],
         'Dataset': [ds_name],
@@ -107,28 +109,25 @@ def main(args, nepex):
     else:
         hyper_opts_df.to_csv('hyper_opt.csv', index=False)
 
-    '''Run SFA'''
-    # fit two-step models
+    # Run SFA
     PEnTex_clf.fit(X_train, y_train)
-    # predict
     PEnTex_clf.predict(X_test, y_test)
 
     if compare:
-        '''compare to FeaturesTools'''
+        # Compare to FeaturesTools
         X_extended_ft = features_tools_extend_X(X, y, ds_name)
         X_train_ft, X_test_ft, y_train_ft, y_test_ft = train_test_split(X_extended_ft, y, random_state=seed, stratify=y)
         PEnTex_clf.train_other(X_train_ft, y_train_ft, 'ft')
         PEnTex_clf.predict_other(X_test_ft, y_test_ft, 'ft')
 
-        '''compare to PCA Augment'''
+        # Compare to PCA Augment
         X_extended_pca = pca_extend_X(X)
-        X_train_pca, X_test_pca, y_train_pca, y_test_pca = train_test_split(X_extended_pca, y, random_state=seed,
-                                                                            stratify=y)
+        X_train_pca, X_test_pca, y_train_pca, y_test_pca = train_test_split(X_extended_pca, y, random_state=seed, stratify=y)
         PEnTex_clf.train_other(X_train_pca, y_train_pca, 'pca')
         PEnTex_clf.predict_other(X_test_pca, y_test_pca, 'pca')
 
-
 def plot_classes_distribution(ds_name, y, preds):
+    # Plot class distribution
     if not os.path.exists('plots/'):
         os.makedirs('plots/')
     plt.clf()
@@ -138,16 +137,16 @@ def plot_classes_distribution(ds_name, y, preds):
     plt.title(f'class distribution- {ds_name}')
     plt.savefig(f'plots/{ds_name}_class_dist.png')
 
-
 def params_dict(best_trial_params):
+    # Convert hyperparameters to dictionary
     params = {}
     for key, value in best_trial_params.items():
         print("    {}: {}".format(key, value))
         params[key] = '{:.4f}'.format(value)
     return params
 
-
 if __name__ == '__main__':
+    # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_id', default='', type=str)
     parser.add_argument('--task', default='', type=str)
@@ -157,6 +156,3 @@ if __name__ == '__main__':
     all_args = parser.parse_args()
 
     main(all_args)
-
-
-

@@ -72,6 +72,8 @@ class SFAXGBoostClassifier(SFAClassifier):
             dtrain = DMatrix(x_train, label=y_train)
         params['objective'] = self.get_task()
         params['num_class'] = 1 if self.get_n_classes() == 2 else self.get_n_classes()
+        params['n_estimators'] = 50
+        params['max_depth'] = 6
         params['verbosity'] = 0
         params['tree_method'] = 'gpu_hist'
         return train(params=params, dtrain=dtrain, num_boost_round=int((10 / (0.01 + params['eta']) ** 2) / 5))
