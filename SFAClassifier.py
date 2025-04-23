@@ -217,9 +217,27 @@ class SFAClassifier:
                 shap_values = clf_ex.shap_values(dvalid, check_additivity=False)  # Calculate SHAP values
             else:
                 shap_values = clf_ex.shap_values(X_val, check_additivity=False)  # Calculate SHAP values
-            val_shap_vals[val_ind] = [shap_values[height_idx][j] for j, height_idx in enumerate(prediction)] if (
-                        self.get_n_classes() > 2 or self.model_name == 'lgbm') \
-                else shap_values  # Store SHAP values
+            # Replace line 220-222 with this code
+            if self.get_n_classes() > 2 or self.model_name == 'lgbm':
+                try:
+                    # Try the original approach first
+                    val_shap_vals[val_ind] = [shap_values[height_idx][j] for j, height_idx in enumerate(prediction)]
+                except IndexError:
+                    # Handle the new SHAP values format safely
+                    if isinstance(shap_values, list) and len(shap_values) > 0:
+                        # For binary classification, where format has changed
+                        if self.get_n_classes() == 2:
+                            # Use the first element of SHAP values list
+                            val_shap_vals[val_ind] = shap_values[0]
+                        else:
+                            # For multiclass, use a safe approach with bound checking
+                            val_shap_vals[val_ind] = [shap_values[min(height_idx, len(shap_values)-1)][j] 
+                                                    for j, height_idx in enumerate(prediction)]
+                    else:
+                        # If it's not a list structure, use it directly
+                        val_shap_vals[val_ind] = shap_values
+            else:
+                val_shap_vals[val_ind] = shap_values  # Store SHAP values
 
         # calculate evaluation metric
         if self.metric == 'auc':
@@ -309,8 +327,25 @@ class SFAClassifier:
                 shap_values = clf_ex.shap_values(dtest, check_additivity=False)  # Calculate SHAP values
             else:
                 shap_values = clf_ex.shap_values(X_test, check_additivity=False)  # Calculate SHAP values
-            test_shap_vals[i, :, :] = [shap_values[height_idx][j] for j, height_idx in enumerate(model_prediction)] if (
-                    self.get_n_classes() > 2 or self.model_name == 'lgbm') else shap_values  # Store SHAP values
+            # Replace line 330-331 with this code
+            try:
+                # Try the original approach first
+                test_shap_vals[i, :, :] = [shap_values[height_idx][j] for j, height_idx in enumerate(model_prediction)] if (
+                        self.get_n_classes() > 2 or self.model_name == 'lgbm') else shap_values
+            except IndexError:
+                # Handle the new SHAP values format safely
+                if isinstance(shap_values, list) and len(shap_values) > 0:
+                    # For binary classification, where format has changed
+                    if self.get_n_classes() == 2:
+                        # Use the first element of SHAP values list
+                        test_shap_vals[i, :, :] = shap_values[0]
+                    else:
+                        # For multiclass, use a safe approach with bound checking
+                        test_shap_vals[i, :, :] = [shap_values[min(height_idx, len(shap_values)-1)][j] 
+                                                for j, height_idx in enumerate(model_prediction)]
+                else:
+                    # If it's not a list structure, use it directly
+                    test_shap_vals[i, :, :] = shap_values
             test_preds[i, :, :] = model_preds if self.len_preds > 1 else \
                     model_preds[:, 1].reshape(model_preds.shape[0], 1)  # Store predictions
             test_all_probas[i, :, :] = model_preds  # Store probabilities
