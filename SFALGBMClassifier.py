@@ -26,6 +26,7 @@ class SFALGBMClassifier(SFAClassifier):
         col_sample_bytree_l, col_sample_bytree_h = self.get_high_low_col_samples()  # Get column sample range
 
         params = {
+            "device_type": 'cuda',  # Use GPU for training"
             'objective': self.get_task(),  # Set the task type
             'verbosity': -1,  # Suppress LightGBM output
             'min_gain_to_split': 0.0001,  # Minimum gain to split
